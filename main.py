@@ -34,17 +34,17 @@ while running:
     bg = pygame.image.load("./imgs/start_bg0.jpg")
     screen.blit(bg, (0, 0))  # 将背景图加载到显存中
 
+    black = 0, 0, 0
+    ground_yellow = 210, 180, 100
+    red = 255, 0, 0
     myFont = pygame.font.SysFont("simhei", 60)
-    color = 0, 0, 0
-    textImage = myFont.render("坤坤战机", True, color)
+    textImage = myFont.render("坤坤战机", True, black)
     screen.blit(textImage, (145, 100))
-    color = 255, 0, 0
-    textImage1 = myFont.render("坤坤战机", True, color)
+    textImage1 = myFont.render("坤坤战机", True, red)
     screen.blit(textImage1, (150, 100))
 
     myFont2 = pygame.font.SysFont("simhei", 25)
-    color = 0, 0, 0
-    textImage2 = myFont2.render("按WASD控制，按space发射子弹", True, color)
+    textImage2 = myFont2.render("按WASD控制，按space发射子弹", True, black)
     screen.blit(textImage2, (100, 580))
 
     plane = pygame.image.load("./imgs/jet.png").convert_alpha()
@@ -89,13 +89,13 @@ while running:
     enemy_W, enemy_H = enemy.get_width(), enemy.get_height()
     enemy_x, enemy_y = random.randint(0, WIDTH - enemy_W), -150
     enemy_event = pygame.USEREVENT
-    pygame.time.set_timer(enemy_event, 10)
+    pygame.time.set_timer(enemy_event, 7)
 
     bullet = pygame.image.load("./imgs/bullet.png").convert_alpha()
     bullet_W, bullet_H = 44, 48
     bullet_x, bullet_y = enemy_x + enemy_W / 2 - bullet_W / 2, enemy_y + enemy_H / 2
     bullet_event = pygame.USEREVENT + 1
-    pygame.time.set_timer(bullet_event, 3)
+    pygame.time.set_timer(bullet_event, 5)
 
     missile = pygame.image.load("./imgs/bullet_1.png").convert_alpha()
     missile_W, missile_H = 37, 32
@@ -103,6 +103,7 @@ while running:
     missile_event = pygame.USEREVENT + 2
     pygame.time.set_timer(missile_event, 1)
 
+    current_score = 0
     dx, dy = 0, 0
 
     clock = pygame.time.Clock()
@@ -137,8 +138,18 @@ while running:
                 missile_y -= 1
                 if missile_y <= 0:
                     missile_shot = False
-            # print(missile_x, missile_y)
-
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_press = pygame.mouse.get_pressed()
+                if mouse_press == (1, 0, 0):
+                    mouse_pos = pygame.mouse.get_pos()
+                    if mouse_pos[0] < x:
+                        dx = -SPEED * dt
+                    elif mouse_pos[0] > x + PLANE_WIDTH:
+                        dx = SPEED * dt
+                    if mouse_pos[1] < y:
+                        dy = -SPEED * dt
+                    elif mouse_pos[1] > y + PLANE_HEIGHT:
+                        dy = SPEED * dt
         dx, dy = 0, 0
         key_press = pygame.key.get_pressed()
         if key_press[K_SPACE]:  # space
@@ -158,17 +169,15 @@ while running:
         screen.blit(bg, (0, 0))
         if missile_shot:
             screen.blit(missile, (missile_x, missile_y))
-        screen.blit(bullet, (bullet_x, bullet_y))
-        screen.blit(enemy, (enemy_x, enemy_y))
-        screen.blit(plane, (x, y))
-        pygame.display.update()  # 将背景图显示到屏幕上
+
         if collision(missile_x, missile_y, missile_W, missile_H, enemy_x, enemy_y, enemy_W, enemy_H):
             missile_shot = False
             enemy_x, enemy_y = random.randint(0, WIDTH - enemy_W), -150
+            current_score += 1
         if collision(bullet_x, bullet_y, bullet_W, bullet_H, x, y, PLANE_WIDTH, PLANE_HEIGHT):
             plane_life -= 1
             print(f"Constant life is {plane_life}! Pay attention!")
-            if plane_life < 0:
+            if plane_life <= 0:
                 print("Game Over!")
                 ctn = False
             bullet_x, bullet_y = enemy_x + enemy_W / 2 - bullet_W / 2, enemy_y + enemy_H / 2
@@ -179,15 +188,21 @@ while running:
         if collision(enemy_x, enemy_y, enemy_W, enemy_H, x, y, PLANE_WIDTH, PLANE_HEIGHT):
             plane_life -= 1
             print(f"Constant life is {plane_life}! Pay attention!")
-            if plane_life < 0:
+            if plane_life <= 0:
                 print("Game Over!")
                 ctn = False
             enemy = pygame.image.load("./imgs/alien_" + str(random.randint(1, 5)) + ".png").convert_alpha()
             enemy_x, enemy_y = random.randint(0, WIDTH - enemy_W), -150
+        show_score = myFont.render(f"{current_score}", True, black)
+        screen.blit(show_score, (WIDTH - 400, 0))
+        screen.blit(bullet, (bullet_x, bullet_y))
+        screen.blit(enemy, (enemy_x, enemy_y))
+        screen.blit(plane, (x, y))
+        pygame.display.update()  # 将背景图显示到屏幕上
 
     # ------------------Page 3----------------
 
-    restart_button=pygame.image.load("./imgs/restart.png").convert_alpha()
+    restart_button = pygame.image.load("./imgs/restart.png").convert_alpha()
     restart_button_x, restart_button_y = WIDTH / 2 - restart_button.get_width() / 2, HEIGHT / 2 + 50
     restart_button_W, restart_button_H = restart_button.get_width(), restart_button.get_height()
     ctn = True
@@ -195,6 +210,7 @@ while running:
         bg = pygame.image.load("./imgs/map2.jpg").convert_alpha()
         txt_GameOver = pygame.image.load("./imgs/gameover.png").convert_alpha()
         txt_GameOver_x, txt_GameOver_y = 192, 42
+        final_score = myFont.render("Score: " + str(current_score), True, ground_yellow)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -203,12 +219,16 @@ while running:
                     ctn = False
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 mouse_pos = pygame.mouse.get_pos()
-                if restart_button_x <= mouse_pos[0] <= restart_button_x + restart_button_W and restart_button_y <= mouse_pos[
-                    1] <= restart_button_y + restart_button_H:
+                if restart_button_x <= mouse_pos[0] <= restart_button_x + restart_button_W and restart_button_y <= \
+                        mouse_pos[
+                            1] <= restart_button_y + restart_button_H:
                     ctn = False
 
         screen.blit(bg, (0, 0))
-        screen.blit(txt_GameOver, (WIDTH / 2 - txt_GameOver_x / 2, HEIGHT / 2 - 50))
+        screen.blit(txt_GameOver, (WIDTH / 2 - txt_GameOver_x / 2, HEIGHT / 2 - 100))
+        screen.blit(final_score, (WIDTH / 2 - txt_GameOver_x / 2 - 25, HEIGHT / 2 - 50))
         screen.blit(restart_button, (restart_button_x, restart_button_y))
         pygame.display.update()
+
 pygame.quit()
+exit(0)
