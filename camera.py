@@ -50,8 +50,8 @@ def test_camera():
 
 def dnn():
     # 加载Caffe模型
-    model_weights = "res10_300x300_ssd_iter_140000.caffemodel"
-    model_config = "deploy.prototxt"
+    model_weights = "./models/res10_300x300_ssd_iter_140000.caffemodel"
+    model_config = "./models/deploy.prototxt"
     net = cv2.dnn.readNetFromCaffe(model_config, model_weights)
     #启动gpu加速(目前不可用)
     #net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
@@ -104,4 +104,4 @@ def dnn():
 if __name__ == "__main__":
     test_camera()
     #face_detection()
-    dnn()
+    #dnn()
