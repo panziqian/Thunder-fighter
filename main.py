@@ -11,6 +11,7 @@ def collision(x1, y1, w1, h1, x2, y2, w2, h2):
     else:
         return False
 
+
 def detect_faces_dnn(image, min_confidence=0.5):
     """
     使用DNN检测人脸
@@ -30,7 +31,7 @@ def detect_faces_dnn(image, min_confidence=0.5):
     net.setInput(blob)
     detections = net.forward()
     # 绘制检测框
-    (startX, startY) = (0,0)
+    (startX, startY) = (0, 0)
     for i in range(0, detections.shape[2]):
         confidence = detections[0, 0, i, 2]
         if confidence > min_confidence:
@@ -43,15 +44,78 @@ def detect_faces_dnn(image, min_confidence=0.5):
             cv2.rectangle(image, (startX, startY), (endX, endY), (0, 255, 0), 2)
             cv2.putText(image, text, (startX, y),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 255), 2)
-    return image,startX,startY
+    return image, startX, startY
 
+
+class Player(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.image = pygame.image.load("./imgs/plane.png").convert_alpha()
+        self.w, self.h = self.image.get_width(), self.image.get_height()
+        self.rect = self.image.get_rect(midbottom=(WIDTH / 2 + 50, HEIGHT))
+        self.life = 10000
+        self.dx, self.dy = 0, 0
+
+    def player_input(self, inside_dt):
+        if mode == 0:
+            key_press = pygame.key.get_pressed()
+            if key_press[K_a] or key_press[K_LEFT]:  # left
+                self.dx = -SPEED * inside_dt
+            elif key_press[K_d] or key_press[K_RIGHT]:  # right
+                self.dx = SPEED * inside_dt
+            elif key_press[K_s] or key_press[K_DOWN]:  # down
+                self.dy = SPEED * inside_dt
+            elif key_press[K_w] or key_press[K_UP]:  # up
+                self.dy = -SPEED * inside_dt
+
+    def update(self, dt):
+        self.player_input(dt)
+        self.rect.x += self.dx
+        self.rect.y += self.dy
+        self.dx, self.dy = 0, 0
+        self.rect.x = max(0, min(WIDTH - self.w, self.rect.x))
+        self.rect.y = max(0, min(HEIGHT - self.h, self.rect.y))
+
+
+class Enemy(pygame.sprite.Sprite):
+    def __init__(self,x,y):
+        super().__init__()
+        self.image = pygame.image.load("./imgs/alien_" + str(random.randint(1, 5)) + ".png").convert_alpha()
+        self.w, self.h = self.image.get_width(), self.image.get_height()
+        self.rect = self.image.get_rect(topleft=(x,y))
+        self.speed = 5
+
+    def update(self):
+        self.rect.y += self.speed
+        #print(self.rect.y)
+        if self.rect.y > HEIGHT:
+            self.kill()
+
+class Enemies:
+    def __init__(self):
+        self.enemy_group=pygame.sprite.Group()
+        self.spawn_timer=0
+        self.spawn_interval=180
+
+    def spawn_enemy(self):
+        x,y=random.randint(0, WIDTH - enemy_W), -150
+        self.enemy_group.add(Enemy(x,y))
+
+    def update(self):
+        self.spawn_timer += 1
+        if  self.spawn_timer >= self.spawn_interval:
+            self.spawn_enemy()
+            self.spawn_timer=0
+        self.enemy_group.update()
+    def draw(self):
+        self.enemy_group.draw(screen)    
 WIDTH = 512
 HEIGHT = 768
 
 pygame.init()  # 初始化pygame库
 print("Pygame version:", pygame.__version__)
 
-cap = cv2.VideoCapture(0) #width:.640.0 height:480
+cap = cv2.VideoCapture(0)
 
 if pygame.display.mode_ok((512, 768)) != 0:
     screen = pygame.display.set_mode((512, 768))
@@ -61,7 +125,7 @@ else:
     exit(0)
 
 pygame.display.set_caption("坤坤战机")
-mode=0 #模式1为键盘控制，模式2为鼠标控制，模式3为人脸识别控制
+mode = 0  # 模式1为键盘控制，模式2为鼠标控制，模式3为人脸识别控制
 running = True
 while running:
 
@@ -102,11 +166,11 @@ while running:
                     pygame.quit()
                     exit(0)
                 elif key_press[K_1]:
-                    mode=0
+                    mode = 0
                 elif key_press[K_2]:
-                    mode=1
+                    mode = 1
                 elif key_press[K_3]:
-                    mode=2
+                    mode = 2
             elif event.type == pygame.QUIT:
                 pygame.quit()
                 exit(0)
@@ -127,6 +191,10 @@ while running:
     plane = pygame.image.load("./imgs/plane.png").convert_alpha()
     plane_x, plane_y = (WIDTH - PLANE_WIDTH) / 2, HEIGHT - PLANE_HEIGHT
     plane_life = 100000
+
+    plane1 = pygame.sprite.GroupSingle()
+    plane1.add(Player())
+    enemies=Enemies()
 
     model_weights = "./models/res10_300x300_ssd_iter_140000.caffemodel"
     model_config = "./models/deploy.prototxt"
@@ -186,7 +254,7 @@ while running:
                 missile_y -= 1
                 if missile_y <= 0:
                     missile_shot = False
-            if event.type == pygame.MOUSEBUTTONDOWN and mode==1:
+            if event.type == pygame.MOUSEBUTTONDOWN and mode == 1:
                 mouse_press = pygame.mouse.get_pressed()
                 if mouse_press == (1, 0, 0):
                     mouse_pos = pygame.mouse.get_pos()
@@ -198,8 +266,10 @@ while running:
                         dy = -SPEED * dt
                     elif mouse_pos[1] > plane_y + PLANE_HEIGHT:
                         dy = SPEED * dt
+        plane1.update(dt)
+        enemies.update()
         key_press = pygame.key.get_pressed()
-        if mode==0:
+        if mode == 0:
             if key_press[K_SPACE]:  # space
                 ctn = True
             elif key_press[K_a] or key_press[K_LEFT]:  # left
@@ -212,12 +282,12 @@ while running:
                 dy = -SPEED * dt
 
         plane_x, plane_y = plane_x + dx, plane_y + dy
-        if mode==2:
+        if mode == 2:
             ret, frame = cap.read()
             if not ret:
                 break
-            output,plane_x,plane_y = detect_faces_dnn(frame)
-            plane_x,plane_y=(plane_x/640)*WIDTH,(plane_y/480)*HEIGHT
+            output, plane_x, plane_y = detect_faces_dnn(frame)
+            plane_x, plane_y = (plane_x / 640) * WIDTH, (plane_y / 480) * HEIGHT
             cv2.imshow("Real-Time DNN Face Detection", output)
         plane_x = max(0, min(WIDTH - PLANE_WIDTH, plane_x))
         plane_y = max(0, min(HEIGHT - PLANE_HEIGHT, plane_y))
@@ -225,6 +295,7 @@ while running:
         if missile_shot:
             screen.blit(missile, (missile_x, missile_y))
 
+        # 碰撞检测
         if collision(missile_x, missile_y, missile_W, missile_H, enemy_x, enemy_y, enemy_W, enemy_H):
             missile_shot = False
             enemy_x, enemy_y = random.randint(0, WIDTH - enemy_W), -150
@@ -250,9 +321,11 @@ while running:
             enemy_x, enemy_y = random.randint(0, WIDTH - enemy_W), -150
         show_score = myFont.render(f"{current_score}", True, ground_yellow)
         screen.blit(show_score, (WIDTH - 400, 0))
-        screen.blit(bullet, (bullet_x, bullet_y))
-        screen.blit(enemy, (enemy_x, enemy_y))
+        #screen.blit(bullet, (bullet_x, bullet_y))
+        #screen.blit(enemy, (enemy_x, enemy_y))
         screen.blit(plane, (plane_x, plane_y))
+        plane1.draw(screen)
+        enemies.draw()
         pygame.display.update()  # 将背景图显示到屏幕上
 
     # ------------------Page 3----------------
