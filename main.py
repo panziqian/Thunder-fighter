@@ -61,6 +61,7 @@ else:
     exit(0)
 
 pygame.display.set_caption("坤坤战机")
+mode=0 #模式1为键盘控制，模式2为鼠标控制，模式3为人脸识别控制
 running = True
 while running:
 
@@ -100,6 +101,12 @@ while running:
                 elif key_press[K_ESCAPE]:
                     pygame.quit()
                     exit(0)
+                elif key_press[K_1]:
+                    mode=0
+                elif key_press[K_2]:
+                    mode=1
+                elif key_press[K_3]:
+                    mode=2
             elif event.type == pygame.QUIT:
                 pygame.quit()
                 exit(0)
@@ -151,6 +158,7 @@ while running:
     ctn = True
     missile_shot = False
     while ctn:
+        dx, dy = 0, 0
         dt = clock.tick(60)
         for event in pygame.event.get():
             if event.type == pygame.KEYDOWN:
@@ -178,7 +186,7 @@ while running:
                 missile_y -= 1
                 if missile_y <= 0:
                     missile_shot = False
-            if event.type == pygame.MOUSEBUTTONDOWN:
+            if event.type == pygame.MOUSEBUTTONDOWN and mode==1:
                 mouse_press = pygame.mouse.get_pressed()
                 if mouse_press == (1, 0, 0):
                     mouse_pos = pygame.mouse.get_pos()
@@ -190,26 +198,27 @@ while running:
                         dy = -SPEED * dt
                     elif mouse_pos[1] > plane_y + PLANE_HEIGHT:
                         dy = SPEED * dt
-        dx, dy = 0, 0
         key_press = pygame.key.get_pressed()
-        if key_press[K_SPACE]:  # space
-            ctn = True
-        elif key_press[K_a] or key_press[K_LEFT]:  # left
-            dx = -SPEED * dt
-        elif key_press[K_d] or key_press[K_RIGHT]:  # right
-            dx = SPEED * dt
-        elif key_press[K_s] or key_press[K_DOWN]:  # down
-            dy = SPEED * dt
-        elif key_press[K_w] or key_press[K_UP]:  # up
-            dy = -SPEED * dt
+        if mode==0:
+            if key_press[K_SPACE]:  # space
+                ctn = True
+            elif key_press[K_a] or key_press[K_LEFT]:  # left
+                dx = -SPEED * dt
+            elif key_press[K_d] or key_press[K_RIGHT]:  # right
+                dx = SPEED * dt
+            elif key_press[K_s] or key_press[K_DOWN]:  # down
+                dy = SPEED * dt
+            elif key_press[K_w] or key_press[K_UP]:  # up
+                dy = -SPEED * dt
 
         plane_x, plane_y = plane_x + dx, plane_y + dy
-        ret, frame = cap.read()
-        if not ret:
-            break
-        output,plane_x,plane_y = detect_faces_dnn(frame)
-        plane_x,plane_y=(plane_x/640)*WIDTH,(plane_y/480)*HEIGHT
-        cv2.imshow("Real-Time DNN Face Detection", output)
+        if mode==2:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            output,plane_x,plane_y = detect_faces_dnn(frame)
+            plane_x,plane_y=(plane_x/640)*WIDTH,(plane_y/480)*HEIGHT
+            cv2.imshow("Real-Time DNN Face Detection", output)
         plane_x = max(0, min(WIDTH - PLANE_WIDTH, plane_x))
         plane_y = max(0, min(HEIGHT - PLANE_HEIGHT, plane_y))
         screen.blit(bg, (0, 0))
@@ -239,7 +248,7 @@ while running:
                 ctn = False
             enemy = pygame.image.load("./imgs/alien_" + str(random.randint(1, 5)) + ".png").convert_alpha()
             enemy_x, enemy_y = random.randint(0, WIDTH - enemy_W), -150
-        show_score = myFont.render(f"{current_score}", True, black)
+        show_score = myFont.render(f"{current_score}", True, ground_yellow)
         screen.blit(show_score, (WIDTH - 400, 0))
         screen.blit(bullet, (bullet_x, bullet_y))
         screen.blit(enemy, (enemy_x, enemy_y))
