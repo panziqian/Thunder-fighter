@@ -4,14 +4,6 @@ import random
 import cv2
 import numpy as np
 
-
-def collision(x1, y1, w1, h1, x2, y2, w2, h2):
-    if abs(x1 - x2) < (w1 + w2) and abs(y1 - y2) < (h1 + h2):
-        return True
-    else:
-        return False
-
-
 def detect_faces_dnn(image, min_confidence=0.5):
     """
     使用DNN检测人脸
@@ -53,43 +45,89 @@ class Player(pygame.sprite.Sprite):
         self.image = pygame.image.load("./imgs/plane.png").convert_alpha()
         self.w, self.h = self.image.get_width(), self.image.get_height()
         self.rect = self.image.get_rect(midbottom=(WIDTH / 2 + 50, HEIGHT))
-        self.life = 10000
+        self.life = 5
+        self.speed=0.7
         self.dx, self.dy = 0, 0
+        self.cooldowntime=0
+        self.missiles=pygame.sprite.Group()
 
-    def player_input(self, inside_dt):
-        if mode == 0:
+    def input(self, inside_dt):
+        
+        if mode == "keyboard":
             key_press = pygame.key.get_pressed()
             if key_press[K_a] or key_press[K_LEFT]:  # left
-                self.dx = -SPEED * inside_dt
+                self.dx = -self.speed * inside_dt
             elif key_press[K_d] or key_press[K_RIGHT]:  # right
-                self.dx = SPEED * inside_dt
+                self.dx = self.speed * inside_dt
             elif key_press[K_s] or key_press[K_DOWN]:  # down
-                self.dy = SPEED * inside_dt
+                self.dy = self.speed * inside_dt
             elif key_press[K_w] or key_press[K_UP]:  # up
-                self.dy = -SPEED * inside_dt
+                self.dy = -self.speed * inside_dt
+        if mode == "mouse":
+            mouse_press = pygame.mouse.get_pressed()
+            if mouse_press == (1, 0, 0):
+                mouse_pos = pygame.mouse.get_pos()
+                if mouse_pos[0] < self.rect.x:
+                    self.dx = -self.speed * dt
+                elif mouse_pos[0] > self.rect.x + self.w:
+                    self.dx = self.speed * dt
+                if mouse_pos[1] < self.rect.y:
+                    self.dy = -self.speed * dt
+                elif mouse_pos[1] > self.rect.y + self.h:
+                    self.dy = self.speed * dt
+        if mode == "face":
+            ret, frame = cap.read()
+            if not ret:
+                return
+            output, self.rect.x, self.rect.y = detect_faces_dnn(frame)
+            self.rect.x, self.rect.y = (self.rect.x / 640) * WIDTH, (self.rect.y / 480) * HEIGHT
+            cv2.imshow("Real-Time DNN Face Detection", output)
+
+    def shoot(self):
+        key_press=pygame.key.get_pressed()
+        if key_press[K_SPACE] and self.cooldowntime == 0:
+            self.missiles.add(Missile(self.rect.centerx,self.rect.y))
+            self.cooldowntime=15
 
     def update(self, dt):
-        self.player_input(dt)
+        self.input(dt)
         self.rect.x += self.dx
         self.rect.y += self.dy
         self.dx, self.dy = 0, 0
         self.rect.x = max(0, min(WIDTH - self.w, self.rect.x))
         self.rect.y = max(0, min(HEIGHT - self.h, self.rect.y))
+        self.missiles.update()
+        if self.cooldowntime>0:
+            self.cooldowntime-=1
 
 
 class Enemy(pygame.sprite.Sprite):
-    def __init__(self,x,y):
+    def __init__(self):
         super().__init__()
         self.image = pygame.image.load("./imgs/alien_" + str(random.randint(1, 5)) + ".png").convert_alpha()
         self.w, self.h = self.image.get_width(), self.image.get_height()
+        x,y=random.randint(0, WIDTH-self.w), -150
         self.rect = self.image.get_rect(topleft=(x,y))
         self.speed = 5
 
+        self.bullets=pygame.sprite.Group()
+        self.bullet_spawn_interval=150
+        self.bullet_spawn_timer=self.bullet_spawn_interval-1
+
     def update(self):
         self.rect.y += self.speed
-        #print(self.rect.y)
+        self.bullet_spawn_timer+=1
+        if self.bullet_spawn_timer >=self.bullet_spawn_interval:
+            self.bullet_spawn_timer=0
+            self.bullets.add(Bullet(self.rect.centerx,self.rect.y))
+        self.bullets.update()
         if self.rect.y > HEIGHT:
             self.kill()
+
+    def kill(self):
+        for bullet in self.bullets:
+            bullet.kill()
+        super().kill()
 
 class Enemies:
     def __init__(self):
@@ -98,8 +136,7 @@ class Enemies:
         self.spawn_interval=180
 
     def spawn_enemy(self):
-        x,y=random.randint(0, WIDTH - enemy_W), -150
-        self.enemy_group.add(Enemy(x,y))
+        self.enemy_group.add(Enemy())
 
     def update(self):
         self.spawn_timer += 1
@@ -108,7 +145,32 @@ class Enemies:
             self.spawn_timer=0
         self.enemy_group.update()
     def draw(self):
-        self.enemy_group.draw(screen)    
+        self.enemy_group.draw(screen)
+
+class Bullet(pygame.sprite.Sprite):
+    def __init__(self,x,y):
+        super().__init__()
+        self.image = pygame.image.load("./imgs/bullet.png").convert_alpha()
+        self.rect=self.image.get_rect(center=(x,y))
+        self.speed=8
+    
+    def update(self):
+        self.rect.y+=self.speed
+        if self.rect.y>=HEIGHT:
+            self.kill()
+
+class Missile(pygame.sprite.Sprite):
+    def __init__(self,x,y):
+        super().__init__()
+        self.image=pygame.image.load("./imgs/bullet_1.png").convert_alpha()
+        self.rect=self.image.get_rect(center=(x,y))
+        self.speed=9
+    
+    def update(self):
+        self.rect.y-=self.speed
+        if self.rect.y<=0:
+            self.kill()
+
 WIDTH = 512
 HEIGHT = 768
 
@@ -124,8 +186,8 @@ else:
     print("the screen setting is not supported")
     exit(0)
 
-pygame.display.set_caption("坤坤战机")
-mode = 0  # 模式1为键盘控制，模式2为鼠标控制，模式3为人脸识别控制
+pygame.display.set_caption("雷电战机")
+mode = "keyboard"  # 模式1为键盘控制，模式2为鼠标控制，模式3为人脸识别控制
 running = True
 while running:
 
@@ -139,14 +201,18 @@ while running:
     ground_yellow = 210, 180, 100
     red = 255, 0, 0
     myFont = pygame.font.SysFont("simhei", 60)
-    textImage = myFont.render("坤坤战机", True, black)
+    textImage = myFont.render("雷电战机", True, black)
     screen.blit(textImage, (145, 100))
-    textImage1 = myFont.render("坤坤战机", True, red)
+    textImage1 = myFont.render("雷电战机", True, red)
     screen.blit(textImage1, (150, 100))
 
     myFont2 = pygame.font.SysFont("simhei", 25)
     textImage2 = myFont2.render("按WASD控制，按space发射子弹", True, black)
     screen.blit(textImage2, (100, 580))
+
+    myFont3 = pygame.font.SysFont("simhei", 25)
+    textImage3 = myFont3.render("按1键盘控制，按2鼠标控制，按3人脸识别控制", True, black)
+    screen.blit(textImage3, (0, 560))
 
     plane = pygame.image.load("./imgs/jet.png").convert_alpha()
     screen.blit(plane, ((WIDTH - 77) / 2, 400))
@@ -166,11 +232,11 @@ while running:
                     pygame.quit()
                     exit(0)
                 elif key_press[K_1]:
-                    mode = 0
+                    mode = "keyboard"
                 elif key_press[K_2]:
-                    mode = 1
+                    mode = "mouse"
                 elif key_press[K_3]:
-                    mode = 2
+                    mode = "face"
             elif event.type == pygame.QUIT:
                 pygame.quit()
                 exit(0)
@@ -182,149 +248,95 @@ while running:
         pygame.display.update()  # 将背景图显示到屏幕上
 
     # -------------Page 2----------------------
-    PLANE_WIDTH = 100
-    PLANE_HEIGHT = 148
     STEP = 5
-    SPEED = 0.3
+    current_score = 0
+    clock = pygame.time.Clock()
 
     bg = pygame.image.load("./imgs/map1.jpg").convert_alpha()
-    plane = pygame.image.load("./imgs/plane.png").convert_alpha()
-    plane_x, plane_y = (WIDTH - PLANE_WIDTH) / 2, HEIGHT - PLANE_HEIGHT
-    plane_life = 100000
 
     plane1 = pygame.sprite.GroupSingle()
     plane1.add(Player())
     enemies=Enemies()
+    all_enemies_bullets=pygame.sprite.Group()
+    all_missiles=pygame.sprite.Group()
+    player=plane1.sprite
 
+    #加载人脸识别模型
     model_weights = "./models/res10_300x300_ssd_iter_140000.caffemodel"
     model_config = "./models/deploy.prototxt"
     net = cv2.dnn.readNetFromCaffe(model_config, model_weights)
-
-    enemy = pygame.image.load("./imgs/alien_" + str(random.randint(1, 5)) + ".png").convert_alpha()
-    enemy_W, enemy_H = enemy.get_width(), enemy.get_height()
-    enemy_x, enemy_y = random.randint(0, WIDTH - enemy_W), -150
-    enemy_event = pygame.USEREVENT
-    pygame.time.set_timer(enemy_event, 7)
-
-    bullet = pygame.image.load("./imgs/bullet.png").convert_alpha()
-    bullet_W, bullet_H = 44, 48
-    bullet_x, bullet_y = enemy_x + enemy_W / 2 - bullet_W / 2, enemy_y + enemy_H / 2
-    bullet_event = pygame.USEREVENT + 1
-    pygame.time.set_timer(bullet_event, 5)
-
-    missile = pygame.image.load("./imgs/bullet_1.png").convert_alpha()
-    missile_W, missile_H = 37, 32
-    missile_x, missile_y = plane_x + (PLANE_WIDTH / 2), plane_y
-    missile_event = pygame.USEREVENT + 2
-    pygame.time.set_timer(missile_event, 1)
-
-    current_score = 0
-    dx, dy = 0, 0
-
-    clock = pygame.time.Clock()
-
+    
     ctn = True
-    missile_shot = False
     while ctn:
-        dx, dy = 0, 0
         dt = clock.tick(60)
         for event in pygame.event.get():
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE:
-                    if not missile_shot:
-                        missile_shot = True
-                        missile_x, missile_y = plane_x + (PLANE_WIDTH / 2), plane_y
                 if event.key == K_ESCAPE:
                     pygame.quit()
                     exit(0)
             elif event.type == pygame.QUIT:
                 pygame.quit()
                 exit()
-            elif event.type == enemy_event:
-                if enemy_y == HEIGHT:
-                    enemy = pygame.image.load("./imgs/alien_" + str(random.randint(1, 5)) + ".png").convert_alpha()
-                    enemy_x, enemy_y = random.randint(0, WIDTH - enemy_W), -150
-                else:
-                    enemy_y += 1
-            elif event.type == bullet_event:
-                bullet_y += 1
-                if bullet_y > HEIGHT:
-                    bullet_x, bullet_y = enemy_x + enemy_W / 2 - bullet_W / 2, enemy_y + enemy_H / 2
-            elif event.type == missile_event and missile_shot:
-                missile_y -= 1
-                if missile_y <= 0:
-                    missile_shot = False
-            if event.type == pygame.MOUSEBUTTONDOWN and mode == 1:
-                mouse_press = pygame.mouse.get_pressed()
-                if mouse_press == (1, 0, 0):
-                    mouse_pos = pygame.mouse.get_pos()
-                    if mouse_pos[0] < plane_x:
-                        dx = -SPEED * dt
-                    elif mouse_pos[0] > plane_x + PLANE_WIDTH:
-                        dx = SPEED * dt
-                    if mouse_pos[1] < plane_y:
-                        dy = -SPEED * dt
-                    elif mouse_pos[1] > plane_y + PLANE_HEIGHT:
-                        dy = SPEED * dt
         plane1.update(dt)
         enemies.update()
-        key_press = pygame.key.get_pressed()
-        if mode == 0:
-            if key_press[K_SPACE]:  # space
-                ctn = True
-            elif key_press[K_a] or key_press[K_LEFT]:  # left
-                dx = -SPEED * dt
-            elif key_press[K_d] or key_press[K_RIGHT]:  # right
-                dx = SPEED * dt
-            elif key_press[K_s] or key_press[K_DOWN]:  # down
-                dy = SPEED * dt
-            elif key_press[K_w] or key_press[K_UP]:  # up
-                dy = -SPEED * dt
-
-        plane_x, plane_y = plane_x + dx, plane_y + dy
-        if mode == 2:
-            ret, frame = cap.read()
-            if not ret:
-                break
-            output, plane_x, plane_y = detect_faces_dnn(frame)
-            plane_x, plane_y = (plane_x / 640) * WIDTH, (plane_y / 480) * HEIGHT
-            cv2.imshow("Real-Time DNN Face Detection", output)
-        plane_x = max(0, min(WIDTH - PLANE_WIDTH, plane_x))
-        plane_y = max(0, min(HEIGHT - PLANE_HEIGHT, plane_y))
-        screen.blit(bg, (0, 0))
-        if missile_shot:
-            screen.blit(missile, (missile_x, missile_y))
+        for enemy in enemies.enemy_group: #收集每架敌机的子弹
+            all_enemies_bullets.add(enemy.bullets)
+        player.shoot()
+        for missile1 in player.missiles:
+            all_missiles.add(missile1)
 
         # 碰撞检测
-        if collision(missile_x, missile_y, missile_W, missile_H, enemy_x, enemy_y, enemy_W, enemy_H):
-            missile_shot = False
-            enemy_x, enemy_y = random.randint(0, WIDTH - enemy_W), -150
-            current_score += 1
-        if collision(bullet_x, bullet_y, bullet_W, bullet_H, plane_x, plane_y, PLANE_WIDTH, PLANE_HEIGHT):
-            plane_life -= 1
-            print(f"Constant life is {plane_life}! Pay attention!")
-            if plane_life <= 0:
-                print("Game Over!")
-                ctn = False
-            bullet_x, bullet_y = enemy_x + enemy_W / 2 - bullet_W / 2, enemy_y + enemy_H / 2
-        if collision(missile_x, missile_y, missile_W, missile_H, bullet_x, bullet_y, bullet_W, bullet_H):
-            missile_shot = False
-            bullet_x, bullet_y = enemy_x + enemy_W / 2 - bullet_W / 2, enemy_y + enemy_H / 2
-            missile_y = -1000
-        if collision(enemy_x, enemy_y, enemy_W, enemy_H, plane_x, plane_y, PLANE_WIDTH, PLANE_HEIGHT):
-            plane_life -= 1
-            print(f"Constant life is {plane_life}! Pay attention!")
-            if plane_life <= 0:
-                print("Game Over!")
-                ctn = False
-            enemy = pygame.image.load("./imgs/alien_" + str(random.randint(1, 5)) + ".png").convert_alpha()
-            enemy_x, enemy_y = random.randint(0, WIDTH - enemy_W), -150
+        if len(enemies.enemy_group)>0 and len(all_missiles): #检测导弹与敌机的碰撞
+            collisions=pygame.sprite.groupcollide(
+                all_missiles,
+                enemies.enemy_group,
+                True,
+                True,
+            )
+            if collisions:
+                for missile,hit_enemy in collisions.items(): 
+                    current_score+=len(hit_enemy)
+
+        if len(all_enemies_bullets)>0 and len(all_missiles): #检测导弹与子弹的碰撞
+            collisions=pygame.sprite.groupcollide(
+                all_missiles,
+                all_enemies_bullets,
+                True,
+                True,
+            )
+
+        if  len(all_enemies_bullets): #检测玩家与子弹的碰撞
+            collisions=pygame.sprite.spritecollide(
+                player,
+                all_enemies_bullets,
+                True,
+            )
+            if collisions:
+                for hit_bullet in collisions: 
+                    player.life-=1
+                    print(f"current life is {player.life}")
+                    if player.life==0:
+                        ctn=False
+
+        if len(enemies.enemy_group)>0: #检测玩家与敌机的碰撞
+            collisions=pygame.sprite.spritecollide(
+                player,
+                enemies.enemy_group,
+                True,
+            )
+            if collisions:
+                for hit_enemy in collisions: 
+                    player.life-=1
+                    print(f"current life is {player.life}")
+                    if player.life==0:
+                        ctn=False
+        #更新画面
+        screen.blit(bg, (0, 0))
         show_score = myFont.render(f"{current_score}", True, ground_yellow)
         screen.blit(show_score, (WIDTH - 400, 0))
-        #screen.blit(bullet, (bullet_x, bullet_y))
-        #screen.blit(enemy, (enemy_x, enemy_y))
-        screen.blit(plane, (plane_x, plane_y))
         plane1.draw(screen)
+        all_enemies_bullets.draw(screen)
+        all_missiles.draw(screen)
         enemies.draw()
         pygame.display.update()  # 将背景图显示到屏幕上
 
